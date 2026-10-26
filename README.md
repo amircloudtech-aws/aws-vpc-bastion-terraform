@@ -29,9 +29,9 @@ Two-AZ VPC in `eu-central-1` built with Terraform: public and private subnets, a
 
 ## What Terraform builds
 
-16 resources: VPC, internet gateway, 4 subnets, 2 route tables with explicit associations, 3 security groups, and the bastion EC2 instance. With `enable_nat=true` it adds a NAT Gateway, an Elastic IP and a private route (19 total).
+24 resources, all in Terraform: VPC, internet gateway, 4 subnets, 2 route tables with explicit associations, 3 security groups, a bastion host, an optional NAT Gateway (Elastic IP, gateway, route), a launch template, a target group, an Application Load Balancer with listener, and an Auto Scaling group (2 instances across 2 AZs, ELB health checks). Without NAT it is 21 resources.
 
-The launch template, Auto Scaling group, target group and ALB were built manually in the console on top of this network. Moving them into Terraform is the next step.
+The ASG instances install Apache through the NAT Gateway at boot, so apply with `enable_nat=true`. The load balancer URL is printed as the `alb_url` output.
 
 ## Usage
 
@@ -64,6 +64,7 @@ ssh -i ~/.ssh/KEY.pem -J ec2-user@BASTION_IP ec2-user@PRIVATE_IP
 - SSH from my laptop to the bastion, and through it to a private instance with ProxyJump.
 - `curl` from a private instance times out without NAT, proving the subnet is private.
 - Two ASG instances in different AZs registered as healthy targets; the ALB DNS name alternates between them.
+- Terminated one ASG instance by hand; the ASG launched a replacement in the same AZ within a minute while the ALB kept serving from the other.
 
 ## What broke and how I fixed it
 
@@ -72,7 +73,7 @@ ssh -i ~/.ssh/KEY.pem -J ec2-user@BASTION_IP ec2-user@PRIVATE_IP
 3. **SSH through the bastion hung.** Ran `bash -c '</dev/tcp/IP/22'` from the bastion to separate network problems from key problems.
 4. **Launch template had no AMI.** Created a new version with the AMI and pointed the ASG at the latest version, since the default version stayed at 1.
 5. **ALB health checks need a web server, and installing one needs internet.** Enabled NAT, added a user-data script to the launch template, and replaced the instances with an instance refresh.
-6. **Cleanup order matters.** Resources created outside Terraform (ASG, ALB, target group) must be deleted first, or `terraform destroy` gets stuck on the subnets and security groups they use.
+6. **Cleanup order matters for hand-built resources.** The ASG, ALB and target group created in the console had to be deleted before `terraform destroy`, or it got stuck on the subnets and security groups they used. Moving them into Terraform fixed it: one `terraform destroy` now removes all 24 resources in the right order.
 
 ## Cost
 
