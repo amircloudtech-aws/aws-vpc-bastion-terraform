@@ -29,3 +29,8 @@ output "ssh_bastion" {
 output "ssh_private_template" {
   value = "ssh -i ~/.ssh/${var.key_name}.pem -J ec2-user@${aws_instance.bastion.public_ip} ec2-user@PRIVATE_IP"
 }
+
+output "alb_url" {
+  description = "Open this in your browser"
+  value       = "http://${aws_lb.app.dns_name}"
+}
